@@ -1,0 +1,20 @@
+[project]
+name = "session-trader"
+version = "0.0.1"
+description = "Bounded-window intraday trading system for listed US stocks priced $1 to $5"
+requires-python = ">=3.12"
+dependencies = [
+  "alpaca-py>=0.30",
+  "polars>=1.0",
+  "duckdb>=1.0",
+  "pydantic>=2.7",
+  "pyyaml>=6.0",
+  "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
