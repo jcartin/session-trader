@@ -1,7 +1,7 @@
 # Data Layer Design
 
-Status: draft v0.1, 2026-10-16. Companion to `design.md` section 4 and
-`backtester.md` sections 1, 4, 5 and 7.
+Status: draft v0.2, 2026-10-16. Companion to `design.md` section 4,
+`backtester.md` sections 1, 4, 5 and 7, and `screener.md` section 5.
 
 The data layer is the first code the project writes, because the phase 0
 measurements, the backtester and the live session all read through it. Its
@@ -78,7 +78,7 @@ it faster than Postgres would, with no server to run during research.
 | exchange | varchar | NASDAQ, NYSE, AMEX (NYSE American), ARCA, OTC |
 | listed_from | date | first date the symbol appears in daily bars |
 | listed_to | date | null while listed; set when the vendor marks it inactive or bars stop for 10 sessions |
-| tradable_at_broker | boolean | from the broker's assets endpoint, refreshed daily |
+| tradable_at_broker | boolean | current value from the broker's assets endpoint; history lives in `symbol_attributes` |
 | cik | varchar | SEC identifier, for filings lookups |
 
 **corporate_actions**
@@ -101,14 +101,44 @@ it faster than Postgres would, with no server to run during research.
 | adv20_dollar | double | 20-session average dollar volume |
 | spread_pct_est | double | from scheduled quote samples, null if none |
 | halt_count_10d | int | |
-| float_shares | bigint | approximate, with `float_source` |
+| float_shares | bigint | approximate, with `float_source`; the value valid on `date`, taken from `symbol_attributes` |
 | bid_price_deficiency | boolean | from exchange notices or 8-K, phase 2 |
 | pump_score | double | design.md 5.2 |
 | quality_flags | varchar[] | see section 5 |
 
+**symbol_attributes** (point-in-time history for mutable reference fields)
+
+| column | type | notes |
+|---|---|---|
+| symbol | varchar | |
+| attribute | varchar | `tradable_at_broker`, `float_shares`, `shares_outstanding`, `exchange`, `bid_price_deficiency` |
+| value | varchar | serialized |
+| valid_from | date | first date this value was observed |
+| valid_to | date | null while current |
+| source | varchar | |
+
+Readers ask for an attribute `as_of` a date and get the row whose
+`valid_from <= as_of < valid_to`. This is what lets the screener run on a
+historical date without seeing today's float or tradability
+(`screener.md` section 5). The `symbols` and `reference_daily` tables carry
+the convenient current or per-day value, derived from this table.
+
+**filings** (phase 2, for the pump filter and the pre-session note)
+
+| column | type | notes |
+|---|---|---|
+| cik, symbol | | |
+| filed_at | timestamp | |
+| form | varchar | 8-K, S-1, S-3, 424B, 10-Q, 10-K, SC 13D, and others |
+| items | varchar[] | 8-K item numbers where applicable |
+| url | varchar | EDGAR link |
+| summary | varchar | one line, agent-written, optional |
+
 **universe_snapshots**: `date`, `symbol`, `rank`, `score`, `config_hash`.
 One row per symbol the screener selected for that date. This is the
-point-in-time universe the backtester replays.
+point-in-time universe the backtester replays. The screener also writes
+`screener_funnel` (counts per filter per date) and `screener_rejections`
+(symbol, date, filter, value) so a backtest can show why a name was absent.
 
 ---
 
@@ -227,4 +257,6 @@ assumptions.
 
 ## 9. Changelog
 
+- v0.2: `symbol_attributes` history table for point-in-time reads, `filings`
+  table, screener funnel and rejection tables, after `screener.md` review.
 - v0.1: initial design.

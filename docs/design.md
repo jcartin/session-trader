@@ -1,6 +1,6 @@
 # Session Trader: System and Operational Design
 
-Status: draft v0.5, 2026-10-16
+Status: draft v0.6, 2026-10-16
 Scope decisions agreed: listed US stocks between $1 and $5, **margin account
 with leverage disabled by configuration** (changed from cash account in v0.3,
 see C1, C2 and section 15), intraday only, advisory mode first, Alpaca first
@@ -61,6 +61,11 @@ the configured budget. Not "made money this week."
 ---
 
 ## 3. Architecture overview
+
+This document is the overview and the constraints register. Each component
+has its own design document at implementation depth; `README.md` in this
+folder is the index. Where this document and a component document disagree,
+the component document is more recent and wins until this one is updated.
 
 ```
                  +-------------------+
@@ -172,7 +177,8 @@ pre-market activity. Produces a watchlist of 20 to 50 names.
 Default filters, all configurable:
 
 
-- Exchange in {NASDAQ, NYSE, NYSE American}. No OTC in v1.
+- Exchange in {NASDAQ, NYSE, NYSE American}. No OTC in v1. ARCA and
+  NYSE Arca are excluded as ETF venues; the universe is common stock only.
 - Close price between $1.00 and $5.00 (floor raised from $0.50, see C12).
 - Not under a Nasdaq or NYSE bid-price deficiency notice (public via exchange
   notices and 8-K filings).
@@ -238,7 +244,8 @@ Expect to discard or heavily modify all three after backtesting.
 
 The only component allowed to emit an `OrderIntent`. Every rule is a pure
 function returning allow or reject with a reason, and every rejection is
-journaled. Defaults for a $5,000 cash account:
+journaled. Defaults for a $5,000 margin account with leverage disabled
+(`risk-manager.md` has the full chain, sizing math and tests):
 
 | Rule | Default | Notes |
 |---|---|---|
@@ -268,7 +275,9 @@ a separate change approval path (section 8).
   and re-evaluates risk on the actual size.
 - Exits are placed as limit orders at the bid with a step-down ladder: if not
   filled in 20 seconds, reprice one tick lower, repeat up to a max slippage.
-  Past that, during FLATTENING only, a marketable limit is allowed.
+  The ladder stops 1.0 percent below its starting bid. Past that, during
+  FLATTENING only, a marketable limit at the bid minus 2.0 percent is
+  allowed (`execution.md` section 5).
 - A broker-side protective stop is placed immediately after each entry fill so
   that a process crash does not leave an unprotected position.
 - `Broker` interface: `place`, `cancel`, `replace`, `positions`, `orders`,
@@ -290,14 +299,22 @@ State machine:
 
 ```
 IDLE -> PREFLIGHT -> ACTIVE -> WINDING_DOWN -> FLATTENING -> CLOSED
-                       |            |              |
-                       +------------+--------------+--> HALTED_EXPOSURE (sub-state)
+  ^                    |            |              |
+  |                    +------------+--------------+--> HALTED_EXPOSURE (flag)
+  +-- LOCKED (loss-limit lock or unresolved reconciliation incident)
 any state --(fatal error / kill switch)--> FLATTENING
 ```
 
+`session-controller.md` carries the full transition table, timers, the
+PREFLIGHT checklist and test cases. Summary:
+
 - **PREFLIGHT**: data quality checks (section 4), broker connectivity, account
-  snapshot, settled cash computed, watchlist loaded, parameters hash recorded.
-  Any failure blocks activation with a reason.
+  snapshot, gross exposure confirmed zero and intraday buying power read,
+  watchlist loaded, parameters hash recorded. Any failure blocks activation
+  with a reason.
+- **LOCKED**: entered when the daily or weekly loss limit trips or a
+  reconciliation incident is unresolved. PREFLIGHT refuses to run until the
+  operator issues `unlock <reason>`, which is journaled.
 - **ACTIVE**: strategies run on each bar; risk manager gates; orders placed.
 - **WINDING_DOWN**: triggered by user deactivate, by the entry cutoff time, or
   by the daily loss limit. No new entries. Open positions managed by exit
@@ -305,15 +322,19 @@ any state --(fatal error / kill switch)--> FLATTENING
 - **FLATTENING**: cancel all open orders, exit all positions via the ladder.
   Triggered by the flatten deadline (default 15:45), by explicit "flatten now",
   or by a fatal error.
-- **HALTED_EXPOSURE**: a held symbol is halted. Alert the operator. On resume,
-  exit immediately at the reopening auction price if within max slippage,
-  otherwise ladder. If still halted at 16:00 the position carries overnight;
-  that is journaled as an incident.
+- **HALTED_EXPOSURE**: a flag over ACTIVE, WINDING_DOWN or FLATTENING set
+  while a held symbol is halted. Alert the operator. On resume, exit
+  immediately at the reopening price if within max slippage, otherwise
+  ladder; no re-entry in that symbol for the rest of the day. If still halted
+  at 16:00 the position carries overnight; that is an `overnight_carry`
+  incident and the operator must `acknowledge_carry <symbol>` before the next
+  PREFLIGHT.
 - **CLOSED**: end-of-session reconciliation against broker positions and
   balances. Any discrepancy is an incident.
 
 The operator controls: `activate`, `deactivate` (graceful), `flatten now`,
-`kill` (flatten plus process stop plus broker-side cancel-all).
+`kill` (flatten plus process stop plus broker-side cancel-all),
+`unlock <reason>`, `acknowledge_carry <symbol>`.
 
 ### 5.7 Position manager
 
@@ -323,9 +344,11 @@ unrealized P&L, and the exit signals received. Enforces max hold time (default
 
 ### 5.8 Journal and reporting
 
-Append-only event table. Event types: `session_state`, `bar`, `quote_snapshot`,
-`candidate`, `risk_decision`, `order_intent`, `order_ack`, `fill`, `cancel`,
-`position_open`, `position_close`, `incident`, `param_change`, `operator_action`.
+Append-only event table. Event types: `session_state`, `heartbeat`, `bar_ref`,
+`quote_snapshot`, `candidate`, `risk_decision`, `order_intent`, `order_ack`,
+`fill`, `cancel`, `position_open`, `position_close`, `incident`,
+`param_change`, `operator_action`. Bars are stored by reference to the data
+layer, not copied. Payload schemas are in `journal-and-reporting.md`.
 
 Every event carries: UTC timestamp, session id, parameter set hash, code
 version (git SHA), and a JSON payload.
@@ -390,7 +413,9 @@ Practiced once a week in paper mode so it is muscle memory.
 
 ### 6.4 Configuration and change management
 
-- Two config files: `risk.yaml` and `strategies.yaml`. Both under git.
+- Six config files under `config/`, all in git: `risk.yaml`, `strategies.yaml`,
+  `fees.yaml`, `screener.yaml`, `blacklist.yaml`, `luld_bands.yaml`.
+  `risk.yaml` has the strictest change path (`operations.md` section 5).
 - Any change to `risk.yaml` requires a human-approved PR and takes effect only
   at the next PREFLIGHT, never mid-session.
 - Any change to `strategies.yaml` requires an attached backtest report
@@ -425,7 +450,8 @@ Practiced once a week in paper mode so it is muscle memory.
 | Broker API down | Cannot flatten via API. Alert with instructions to use layer 3 kill switch. Journal an incident. |
 | Held symbol halted at deactivate | HALTED_EXPOSURE path (5.6). Accept that "flat on deactivate" is best-effort under halts and say so in the UI. |
 | Exit ladder exhausts slippage budget | During FLATTENING, marketable limit is permitted. Outside FLATTENING, hold and alert. |
-| Good-faith violation risk | Settled-cash gate prevents it; if the broker reports one anyway, lock activation and investigate. |
+| Good-faith violation risk (cash-account mode only) | Settled-cash gate prevents it; if the broker reports one anyway, lock activation and investigate. Not applicable in the default margin mode. |
+| Margin call despite the leverage gate | Should be impossible by construction. Treat as a defect: lock live keys, reconcile the account payload against our exposure math, and do not resume until explained (`operations.md` playbook 8). |
 | Reconciliation mismatch | Lock activation until resolved. Mismatches are usually fee or partial-fill accounting; occasionally a real missed fill. |
 
 ---
@@ -485,7 +511,7 @@ What the agent will be genuinely good at here:
 | Historical data | 0 to 50 per month | same | same |
 | Real-time data | 0 (IEX) | ~99 per month (Alpaca SIP) | ~99 to 199 per month (SIP) |
 | Hosting | 0 (local) | 0 | 20 to 50 per month |
-| LLM usage | 20 to 50 per month | 50 to 100 per month | 50 to 150 per month |
+| LLM usage | 50 to 100 per month | 50 to 150 per month | 50 to 150 per month |
 | Operator time | 5 to 10 hours per week | 1 hour per session day plus weekly review | same |
 
 Expect phase 3 to lose money initially while fee and slippage models are
@@ -613,6 +639,11 @@ wider spread model.
 
 - v0.1: initial scoping conversation.
 - v0.2: full system and operational design; OTC moved to future section.
+- v0.6: component design set added (session controller, execution, risk
+  manager, screener, signal engine, journal and reporting, operations, agent
+  operating model). This document aligned to them: margin-account wording in
+  5.4, LOCKED state and new operator commands in 5.6, event types in 5.8,
+  exit ladder budgets in 5.5, six config files in 6.4, ARCA exclusion in 5.1.
 - v0.5: data layer design in `data-layer.md`; phase 0 script added.
 - v0.4: backtester design split into `backtester.md`; open question 2 resolved.
 - v0.3: phase 0 desk research. PDT retirement changes account type to margin

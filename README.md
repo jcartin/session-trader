@@ -6,10 +6,8 @@ recommendations, optionally executes them, and is flat when deactivated.
 
 Project name is a working title.
 
-- `docs/design.md`: system and operational design (source of truth while in design phase)
-- `docs/backtester.md`: fill, spread, halt and fee models, validation protocol
-- `docs/data-layer.md`: storage layout, schema, vendor adapters, ingestion jobs
-- `scripts/phase0/measure_universe.py`: phase 0 measurements against an Alpaca paper account (not yet executed)
+- `docs/README.md`: index of the design document set (eleven documents covering every component, operations and the agent's role)
+- `CLAUDE.md`: rules for an AI agent working in this repository
 
 ## Running phase 0
 
