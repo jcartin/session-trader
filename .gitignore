@@ -1,0 +1,19 @@
+# secrets and local config
+.env
+.env.*
+*.key
+secrets/
+# data
+data/
+*.parquet
+*.duckdb
+# python
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+# os/editor
+.DS_Store
+.idea/
+.vscode/
