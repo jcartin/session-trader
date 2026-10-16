@@ -7,5 +7,6 @@ recommendations, optionally executes them, and is flat when deactivated.
 Project name is a working title.
 
 - `docs/design.md`: system and operational design (source of truth while in design phase)
+- `docs/backtester.md`: fill, spread, halt and fee models, validation protocol
 
 Status: design phase. No code yet. See `docs/design.md` section 10 for the roadmap.

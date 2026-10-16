@@ -1,6 +1,6 @@
 # Session Trader: System and Operational Design
 
-Status: draft v0.3, 2026-10-16
+Status: draft v0.4, 2026-10-16
 Scope decisions agreed: listed US stocks between $1 and $5, **margin account
 with leverage disabled by configuration** (changed from cash account in v0.3,
 see C1, C2 and section 15), intraday only, advisory mode first, Alpaca first
@@ -603,10 +603,7 @@ wider spread model.
 ## 13. Open questions
 
 1. Which real-time data vendor, after phase 0 price checks.
-2. Whether to build the backtester by hand (full control, more work) or adopt
-   a library (faster start, less control over fills and halts). Leaning
-   hand-built because halt and partial-fill modeling matter here and most
-   libraries ignore them.
+2. Resolved: hand-built, event-driven backtester. See `backtester.md`.
 3. Activation trigger: always manual, or allow scheduled activation with the
    operator only approving the watchlist.
 4. Alert delivery: which channel reaches the operator fastest in practice.
@@ -616,6 +613,7 @@ wider spread model.
 
 - v0.1: initial scoping conversation.
 - v0.2: full system and operational design; OTC moved to future section.
+- v0.4: backtester design split into `backtester.md`; open question 2 resolved.
 - v0.3: phase 0 desk research. PDT retirement changes account type to margin
   with leverage disabled. Price floor raised to $1.00. Fee, data, LULD and OTC
   facts filled in. Verification log added.
