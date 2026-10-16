@@ -9,7 +9,8 @@ documents disagree, the component document is more recent and wins until
 | Document | Covers |
 |---|---|
 | `design.md` | System and operational design overview; constraints register; cost tiers; roadmap and phase exit criteria; OTC as future work; verification log |
-| `regulatory-and-constraints.md` | Legal status, manipulation rules, broker and market data contract terms, margin rules, taxes and recordkeeping, OTC rules; confidence ratings and professional-review flags (pending) |
+| `regulatory-and-constraints.md` | Legal status, manipulation rules and conduct invariants, broker and margin terms, market data licensing, market structure risks, taxes and records, OTC rules, pending changes, required design deltas, professional consultations |
+| `research/` | The three underlying research reports with every source: R1 legal status and manipulation, R2 broker and data terms, R3 tax, records and OTC |
 | `data-layer.md` | Storage layout, Parquet and DuckDB schema, point-in-time attributes, vendor adapter protocol, adjustment, quality flags, ingestion jobs, phase 0 measurements |
 | `screener.md` | Universe filter pipeline, ranking score, pump-detection score, point-in-time guarantee, output tables |
 | `signal-engine.md` | Strategy protocol, MarketContext and look-ahead guard, Candidate and ExitSignal schemas, conflict resolution, three starter strategies |

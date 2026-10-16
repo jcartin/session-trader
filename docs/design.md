@@ -1,6 +1,6 @@
 # Session Trader: System and Operational Design
 
-Status: draft v0.6, 2026-10-16
+Status: draft v0.7, 2026-10-16
 Scope decisions agreed: listed US stocks between $1 and $5, **margin account
 with leverage disabled by configuration** (changed from cash account in v0.3,
 see C1, C2 and section 15), intraday only, advisory mode first, Alpaca first
@@ -56,6 +56,10 @@ the configured budget. Not "made money this week."
 | C9 | Regulatory: own account only. Managing others' money or selling signals requires registration | Architecture has no multi-user or distribution features. |
 | C10 | Taxes: all gains are short-term; wash-sale rule applies to repeated trades in the same name within 30 days | Journal exports a tax lot report. Not a design driver otherwise. |
 | C11 | Market hours: 09:30 to 16:00 ET. Opening 15 minutes and closing 15 minutes have the worst spreads and most halts | Default activation window excludes 09:30 to 09:45 and all entries stop by 15:30. Hard flatten deadline 15:45. Configurable. |
+| C13 | Beneficial ownership: Schedule 13D or 13G at 5 percent of shares outstanding; strict-liability short-swing recovery above 10 percent. Post-reverse-split listed stocks exist with under one million shares outstanding, so a six-figure position can cross 5 percent. **[verified 2026-10-16]** | Unconditional cap of 1 percent of shares outstanding per symbol; reject when the count is missing; invalidate cached counts on any split; journal the maximum intraday ownership percentage. |
+| C14 | Anti-manipulation law binds any trader. The 2025 to 2026 SEC cases against individuals all involved orders placed to be cancelled on the side opposite real intent, in thin books, mostly outside regular hours; intent is inferred from order-to-trade ratios. **[verified 2026-10-16]** | Conduct invariants in `regulatory-and-constraints.md` section 3: one working order per side per symbol, orders only at or inside the spread, cancel-replace toward the market, regular hours only, cancel-to-fill ratio monitored with an alert at 10 to 1. |
+| C15 | Market data is licensed at non-professional rates only to a natural person using it for personal purposes in an account in their own name; redistribution and derived products to third parties are prohibited; an entity account is professional automatically. **[verified 2026-10-16]** | Accounts stay in the individual's name. The agent and any LLM see derived artifacts only, never raw quotes or bars. No public dashboards or shared scanners. |
+| C16 | The wash-sale rule disallows a loss when the same stock is bought within 30 days either side; losses roll into the next lot and a December loss washed in January defers into the next tax year. The 475(f) election that removes the rule cannot take effect before tax year 2027. **[verified 2026-10-16]** | Independent tax lot and wash-sale engine reconciled to the 1099-B; configurable year-end blackout (flat in open wash chains by mid-December, no re-entry for 31 days) until 475(f) is elected; trader-status evidence export. |
 | C12 | Nasdaq's $1.00 minimum bid price rule, tightened in January 2025: a company below $1.00 for 30 consecutive days gets a deficiency notice; more than 360 days non-compliant means suspension; a company that falls below $1.00 within a year of a reverse split is delisted with no grace period. Sub-$1 listed stocks are therefore structurally headed for a reverse split or delisting. **[verified 2026-10-16]** | Raise the universe price floor from $0.50 to **$1.00**. This also avoids the sub-$0.75 LULD regime where bands are 75 percent and spreads are widest. Sub-$1 names remain a possible later extension with their own study. |
 
 ---
@@ -262,6 +266,10 @@ journaled. Defaults for a $5,000 margin account with leverage disabled
 | Halt gate | Reject any symbol currently halted or halted within the last 15 minutes | Addresses C5 |
 | Consecutive loss brake | After 3 losing trades in a session, stop new entries | Behavioral guard against tilt, for the system and the human |
 | Per-symbol cooldown | No re-entry in a symbol for 30 minutes after an exit | |
+| Ownership cap | Shares held per symbol at most 1 percent of shares outstanding; reject if the count is missing | Addresses C13 |
+| Side discipline | One working order per side per symbol; no open buy while a sell is open in the same symbol unless the sell is a protective exit on a filled position | Addresses C14 |
+| Price sanity gate | Reject any limit more than 5 percent from the last trade | Addresses C14 and clearly-erroneous risk |
+| Year-end blackout (tax mode capital only) | Flat in any symbol with an open wash chain by the configured December date; no re-entry in it for 31 days | Addresses C16 |
 
 Risk parameters live in a separate config file from strategy parameters, with
 a separate change approval path (section 8).
@@ -639,6 +647,9 @@ wider spread model.
 
 - v0.1: initial scoping conversation.
 - v0.2: full system and operational design; OTC moved to future section.
+- v0.7: regulatory review folded in: constraints C13 to C16, four new risk
+  rules (ownership cap, side discipline, price sanity, year-end blackout).
+  Synthesis in `regulatory-and-constraints.md`; reports under `research/`.
 - v0.6: component design set added (session controller, execution, risk
   manager, screener, signal engine, journal and reporting, operations, agent
   operating model). This document aligned to them: margin-account wording in
