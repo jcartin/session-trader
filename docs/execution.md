@@ -25,8 +25,8 @@ Two rules the rest of the system depends on:
 
 ```python
 class Broker(Protocol):
-    name: str                       # "backtest", "alpaca-paper", "alpaca-live"
-    mode: Literal["backtest", "paper", "live"]
+    name: str                       # "backtest", "simulation", "alpaca-paper", "alpaca-live"
+    mode: Literal["backtest", "simulation", "paper", "live"]
 
     # account and state
     def account(self) -> AccountSnapshot: ...
@@ -372,7 +372,7 @@ intended: the 0.3 percent budget is the budget. The test asserts 2.00.
 | `stream_silence_seconds` | 30 | |
 | `rate_limit_fraction` | 0.8 | of published broker limit |
 | `assets_refresh_hours` | 4 | |
-| `mode` | `paper` | `backtest`, `paper`, `live`; must match key pair |
+| `mode` | `simulation` | `backtest`, `simulation`, `paper`, `live`; paper and live must match the key pair; simulation and backtest need no keys |
 
 ## 14. Changelog
 

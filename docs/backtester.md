@@ -1,6 +1,6 @@
 # Backtester Design
 
-Status: draft v0.1, 2026-10-16. Companion to `design.md` sections 3, 5 and 7.
+Status: draft v0.2, 2026-10-17. Companion to `design.md` sections 3, 5 and 7, and `simulation-mode.md`.
 
 The backtester exists to answer one question honestly: would this strategy,
 run through this risk manager, against these fills, have had positive
@@ -236,10 +236,14 @@ Parameters are tuned on one window and judged on another, always.
 
 ---
 
-## 9. Backtest to paper to live equivalence
+## 9. Backtest to simulation to paper to live equivalence
+
+The fill, impact, spread and fee logic is one shared module used by both the
+backtester and the simulation mode's `SimulatedBroker` (`simulation-mode.md`
+sections 2 and 8), so the two agree by construction on recorded input.
 
 The strongest check on the backtester is to feed it a day that actually
-happened in paper or live trading and compare.
+happened in simulation, paper or live trading and compare.
 
 - Every paper and live session's journal can be replayed through the
   backtester using the stored quotes and bars from that day.
@@ -283,4 +287,5 @@ Steps 6 to 9 make it honest enough for a go decision.
 
 ## 12. Changelog
 
+- v0.2: shared fill engine with simulation mode noted; equivalence section renamed.
 - v0.1: initial design.

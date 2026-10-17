@@ -18,6 +18,7 @@ documents disagree, the component document is more recent and wins until
 | `execution.md` | Broker protocol and models, order lifecycle, entry pricing, exit ladder, protective stops, reconciliation, Alpaca adapter, error taxonomy, FakeBroker |
 | `session-controller.md` | State machine including LOCKED and HALTED_EXPOSURE, transition table, timers, PREFLIGHT checklist, operator commands, crash recovery, tests |
 | `journal-and-reporting.md` | Append-only event schema and payloads, metric definitions, reconciliation, tax lot export, agent read-only role |
+| `simulation-mode.md` | Fourth operating mode: live data, local fills from a queue model with latency, virtual accounts for brackets and A/B, stream recording and replay, efficiency and efficacy reporting, shadow-mode calibration |
 | `backtester.md` | Event replay, fill and impact models, spread sources, halt simulation, date-ranged fees, validation protocol, backtest-to-live equivalence |
 | `operations.md` | Daily, weekly and monthly runbooks, monitoring thresholds, three-layer kill switch, change management, secrets, deployment, incident playbooks, phase gates |
 | `agent-operating-model.md` | Agent roles and access matrix, pre-session note and post-session review templates, tuning proposal format, calibration loop, repository conventions |

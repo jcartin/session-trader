@@ -1,6 +1,6 @@
 # Session Trader: System and Operational Design
 
-Status: draft v0.7, 2026-10-16
+Status: draft v0.8, 2026-10-17
 Scope decisions agreed: listed US stocks between $1 and $5, **margin account
 with leverage disabled by configuration** (changed from cash account in v0.3,
 see C1, C2 and section 15), intraday only, advisory mode first, Alpaca first
@@ -113,8 +113,14 @@ the component document is more recent and wins until this one is updated.
 
 1. Deterministic hot path. Signal, risk, and execution are rule-based code
    with versioned parameters. Same inputs, same outputs, always.
-2. One execution interface. Backtest, paper and live use the same
-   `Broker` interface. The strategy code cannot tell which it is talking to.
+2. One execution interface. Backtest, simulation, paper and live use the
+   same `Broker` interface. The strategy code cannot tell which it is talking
+   to. Four operating modes, in order of adoption: **backtest** on historical
+   data; **simulation** on live data with our own fill model and no money
+   (`simulation-mode.md`); **paper** against the broker's paper account for
+   integration testing; **live** with very small size. Advisory mode, where
+   the system recommends and the operator executes by hand, is available in
+   simulation, paper and live.
 3. Risk manager is the only component that can create an order. Strategies
    produce candidates; only the risk manager promotes a candidate to an order.
 4. Append-only journal. Nothing is updated in place; state is rebuilt from
@@ -298,7 +304,9 @@ a separate change approval path (section 8).
   refuses any symbol not marked tradable before the order reaches the broker,
   and the screener re-checks tradability at PREFLIGHT since the asset master
   refreshes three times a day.
-  Implementations: `BacktestBroker`, `AlpacaPaperBroker`, `AlpacaLiveBroker`.
+  Implementations: `BacktestBroker`, `SimulatedBroker` (live data, local
+  fills, no money; `simulation-mode.md`), `AlpacaPaperBroker`,
+  `AlpacaLiveBroker`.
   IBKR and Tradier adapters later.
 
 ### 5.6 Session controller
@@ -513,7 +521,7 @@ What the agent will be genuinely good at here:
 
 ## 9. Investment and operating cost
 
-| Item | Phase 1 (research) | Phase 2 (paper / advisory) | Phase 3 (live small) |
+| Item | Phase 1 (research) | Phase 2 (simulation, then paper) | Phase 3 (live small) |
 |---|---|---|---|
 | Trading capital | 0 | 0 | 5,000 to 10,000, sized so total loss is acceptable; at least 2,000 to keep margin-account features |
 | Historical data | 0 to 50 per month | same | same |
@@ -545,15 +553,24 @@ the fee and slippage model, three starter strategies, risk manager, journal.
 Exit when: a full backtest of 2 years runs end to end and the walk-forward
 report is produced automatically.
 
-**Phase 2: Paper and advisory (6 to 8 weeks, at least 40 sessions)**
-Session controller, Alpaca paper adapter, advisory UI, alerts, runbook, kill
-switch drills, agent pre- and post-session notes.
-Exit when: 40 paper sessions with zero reconciliation mismatches, zero
-unhandled incidents, and paper expectancy positive after modeled costs.
+**Phase 2a: Simulation (8 to 10 weeks, at least 40 sessions)**
+Session controller, SimulatedBroker with the shared fill engine and queue
+model, stream recorder and replay, advisory UI, alerts, runbook, kill switch
+drills, agent pre- and post-session notes. Live SIP data required.
+Exit when: 40 simulation sessions at realistic pessimism with positive
+expectancy after modeled costs, the pessimistic bracket not deeply negative,
+zero unhandled incidents, and replay determinism tests green.
+
+**Phase 2b: Broker paper (overlapping, at least 20 sessions)**
+Alpaca paper adapter exercised on the same sessions for order lifecycle,
+rejections, rate limits and reconciliation.
+Exit when: 20 paper sessions with zero reconciliation mismatches and the
+simulation-versus-paper comparison report produced automatically.
 
 **Phase 3: Live small (ongoing, review at 60 sessions)**
-SIP data, live keys, minimum sizes. Compare live slippage to paper model
-weekly and recalibrate.
+Live keys, minimum sizes, shadow simulation on every live session. Compare
+live fills to the shadow simulation weekly and recalibrate latency, queue
+and impact parameters.
 Exit criteria to scale up: 60 live sessions, net positive expectancy,
 drawdown within budget, slippage model within tolerance. Any one failing
 means stay small or go back to phase 2.
@@ -647,6 +664,9 @@ wider spread model.
 
 - v0.1: initial scoping conversation.
 - v0.2: full system and operational design; OTC moved to future section.
+- v0.8: simulation mode added as the fourth operating mode
+  (`simulation-mode.md`); phase 2 split into 2a simulation and 2b broker
+  paper; shadow simulation added to phase 3.
 - v0.7: regulatory review folded in: constraints C13 to C16, four new risk
   rules (ownership cap, side discipline, price sanity, year-end blackout).
   Synthesis in `regulatory-and-constraints.md`; reports under `research/`.
